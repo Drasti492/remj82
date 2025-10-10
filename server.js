@@ -38,9 +38,10 @@ mongoose
   })
   .then(() => {
     console.log("✅ MongoDB Atlas connected!");
-    app.listen(PORT, () =>
-      console.log(`🚀 Server running on http://localhost:${PORT} or ${process.env.VERCEL_URL}`)
-    );
+app.listen(PORT, () =>
+  console.log(`🚀 Server running on port ${PORT}`)
+);
+
   })
   .catch((err) => console.error("❌ MongoDB error:", err));
 
