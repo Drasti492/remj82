@@ -2,25 +2,27 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const { PORT, MONGO_URI } = require("./config");
-const { CLIENT_URL } = require("./config");
+const { PORT, MONGO_URI, CLIENT_URL } = require("./config");
 
 const app = express();
 
 // ===== Middleware =====
 app.use(express.json());
 
-// CORS configuration for local and Vercel deployment
+// ✅ CORS configuration — allow both local + live frontend
 const allowedOrigins = [
-  "http://127.0.0.1:5500", // Local development (VS Code Live Server)
-  "https://gloweycosmetics.vercel.app/", // Replace with your actual Vercel URL
+  CLIENT_URL, // from your .env (Render)
+  "http://localhost:5173", // for Vite local dev
+  "http://127.0.0.1:5500" // VSCode Live Server
 ];
+
 app.use(
   cors({
-    origin: (origin, callback) => {
+    origin: function (origin, callback) {
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
+        console.log("❌ CORS blocked origin:", origin);
         callback(new Error("Not allowed by CORS"));
       }
     },
@@ -39,12 +41,10 @@ mongoose
   })
   .then(() => {
     console.log("✅ MongoDB Atlas connected!");
-app.listen(PORT, () =>
-  console.log(`🚀 Server running on port ${PORT}`)
-);
-
+    const port = PORT || 4000;
+    app.listen(port, () => console.log(`🚀 Server running on port ${port}`));
   })
   .catch((err) => console.error("❌ MongoDB error:", err));
 
-// Export app for Vercel
+// Export for serverless
 module.exports = app;
