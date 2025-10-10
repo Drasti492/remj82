@@ -12,7 +12,7 @@ app.use(express.json());
 // CORS configuration for local and Vercel deployment
 const allowedOrigins = [
   "http://127.0.0.1:5500", // Local development (VS Code Live Server)
-  "https://your-app.vercel.app", // Replace with your actual Vercel URL
+  "https://gloweycosmetics.vercel.app/", // Replace with your actual Vercel URL
 ];
 app.use(
   cors({

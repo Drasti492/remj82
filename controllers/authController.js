@@ -44,54 +44,80 @@ exports.logout = (req, res) => {
   res.json({ message: "Logout successful" }); // Implement session clearing if needed
 };
 
-// Forgot Password
+// Forgot Password (send code)
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ error: "Email not found" });
-    }
-    const resetToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
-    user.resetToken = resetToken;
-    user.resetTokenExpire = new Date(Date.now() + 3600000); // 1 hour
+    if (!user) return res.status(400).json({ error: "Email not found" });
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    user.resetCode = code;
+    user.resetCodeExpire = Date.now() + 10 * 60 * 1000; // 10 min
     await user.save();
-    res.json({ message: "Reset link sent to your email" }); // Send email in production
+
+    await axios.post(
+      MAILJET_URL,
+      {
+        Messages: [
+          {
+            From: { Email: process.env.SENDER_EMAIL, Name: "Your App" },
+            To: [{ Email: email }],
+            Subject: "Password Reset Code",
+            HTMLPart: `<h3>Reset Your Password</h3><p>Your code is: <strong>${code}</strong></p><p>This code expires in 10 minutes.</p>`,
+          },
+        ],
+      },
+      {
+        auth: {
+          username: process.env.MAILJET_API_KEY,
+          password: process.env.MAILJET_SECRET_KEY,
+        },
+      }
+    );
+
+    res.json({ message: "Reset code sent to your email" });
   } catch (err) {
-    res.status(500).json({ error: "Server error during password reset request" });
+    console.error(err.response?.data || err.message);
+    res.status(500).json({ error: "Failed to send reset code" });
   }
 };
 
-// Reset Password
+// Reset Password (verify code)
 exports.resetPassword = async (req, res) => {
   try {
-    const { token, password } = req.body;
-    const user = await User.findOne({
-      resetToken: token,
-      resetTokenExpire: { $gt: Date.now() },
-    });
-    if (!user) {
-      return res.status(400).json({ error: "Invalid or expired token" });
+    const { email, code, newPassword } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) return res.status(400).json({ error: "User not found" });
+
+    if (user.resetCode !== code || Date.now() > user.resetCodeExpire) {
+      return res.status(400).json({ error: "Invalid or expired reset code" });
     }
-    user.password = password;
-    user.resetToken = undefined;
-    user.resetTokenExpire = undefined;
+
+    user.password = newPassword;
+    user.resetCode = undefined;
+    user.resetCodeExpire = undefined;
     await user.save();
+
     res.json({ message: "Password reset successful" });
   } catch (err) {
     res.status(500).json({ error: "Server error during password reset" });
   }
 };
 
+
 // Send Verification Email
 exports.sendVerificationEmail = async (req, res) => {
   try {
     const { email } = req.body;
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ error: "Email not found" });
-    }
-    const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code
+    if (!user) return res.status(400).json({ error: "Email not found" });
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    user.verificationCode = code;
+    user.verificationCodeExpire = Date.now() + 10 * 60 * 1000; // expires in 10 min
+    await user.save();
+
     await axios.post(
       MAILJET_URL,
       {
@@ -100,7 +126,6 @@ exports.sendVerificationEmail = async (req, res) => {
             From: { Email: process.env.SENDER_EMAIL, Name: "Your App" },
             To: [{ Email: email }],
             Subject: "Verify Your Email",
-            TextPart: `Your verification code is: ${code}`,
             HTMLPart: `<h3>Verify Your Email</h3><p>Your code is: <strong>${code}</strong></p><p>This code expires in 10 minutes.</p>`,
           },
         ],
@@ -110,11 +135,9 @@ exports.sendVerificationEmail = async (req, res) => {
           username: process.env.MAILJET_API_KEY,
           password: process.env.MAILJET_SECRET_KEY,
         },
-        headers: { "Content-Type": "application/json" },
       }
     );
-    user.verified = false; // Reset if re-sending
-    await user.save(); // Save user state (optional, depending on your flow)
+
     res.json({ message: "Verification email sent" });
   } catch (err) {
     console.error(err.response?.data || err.message);
@@ -127,17 +150,25 @@ exports.verifyCode = async (req, res) => {
   try {
     const { email, code } = req.body;
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ error: "Email not found" });
+    if (!user) return res.status(400).json({ error: "Email not found" });
+
+    if (
+      user.verificationCode !== code ||
+      Date.now() > user.verificationCodeExpire
+    ) {
+      return res.status(400).json({ error: "Invalid or expired code" });
     }
-    // In a real app, store the code in the user document or a separate collection with an expiration
-    // For simplicity, assume the code is sent and valid for 10 minutes (adjust backend logic)
-    user.verified = true; // Set verified after successful code match
+
+    user.verified = true;
+    user.verificationCode = undefined;
+    user.verificationCodeExpire = undefined;
     await user.save();
+
     res.json({ message: "Email verified successfully" });
   } catch (err) {
     res.status(500).json({ error: "Failed to verify code" });
   }
 };
+
 
 module.exports = exports;
