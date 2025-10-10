@@ -25,5 +25,6 @@ const sendEmail = async (to, subject, html) => {
     throw new Error("Email sending failed");
   }
 };
+console.log("🔐 BREVO_API_KEY:", process.env.BREVO_API_KEY ? "Loaded ✅" : "Missing ❌");
 
 module.exports = sendEmail;
