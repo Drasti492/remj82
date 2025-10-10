@@ -12,6 +12,7 @@ app.use(express.json());
 // ✅ CORS configuration — allow both local + live frontend
 const allowedOrigins = [
   CLIENT_URL, // from your .env (Render)
+  "https://remfr.vercel.app",
   "http://localhost:5173", // for Vite local dev
   "http://127.0.0.1:5500" // VSCode Live Server
 ];
