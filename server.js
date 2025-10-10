@@ -3,6 +3,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const { PORT, MONGO_URI } = require("./config");
+const { CLIENT_URL } = require("./config");
 
 const app = express();
 
