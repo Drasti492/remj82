@@ -66,20 +66,19 @@ exports.logout = (req, res) => {
 };
 
 // ===== FORGOT PASSWORD =====
-// ===== FORGOT PASSWORD =====
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
     const user = await User.findOne({ email });
 
+    // Neutral message to prevent user enumeration
     if (!user) {
-      // Neutral message — doesn’t confirm existence of the account
       return res.json({ message: "If this email is registered, a reset code has been sent." });
     }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     user.resetCode = code;
-    user.resetCodeExpire = Date.now() + 10 * 60 * 1000;
+    user.resetCodeExpire = Date.now() + 10 * 60 * 1000; // 10 min
     await user.save();
 
     await sendEmail(
@@ -87,16 +86,15 @@ exports.forgotPassword = async (req, res) => {
       "Password Reset Code",
       `<h3>Reset Your Password</h3>
        <p>Your reset code is: <strong>${code}</strong></p>
-       <p>This code expires in 10 minutes.</p>`
+       <p>This code will expire in 10 minutes.</p>`
     );
 
     res.json({ message: "If this email is registered, a reset code has been sent." });
   } catch (err) {
     console.error("Forgot password error:", err.message);
-    res.status(500).json({ error: "Something went wrong while processing your request." });
+    res.status(500).json({ message: "Something went wrong while processing your request. Please try again later." });
   }
 };
-
 
 // ===== RESET PASSWORD =====
 exports.resetPassword = async (req, res) => {
@@ -108,7 +106,11 @@ exports.resetPassword = async (req, res) => {
       return res.status(400).json({ message: "No account found with this email address." });
     }
 
-    if (!user.resetCodeExpire || Date.now() >= Number(user.resetCodeExpire)) {
+    if (!user.resetCode || !user.resetCodeExpire) {
+      return res.status(400).json({ message: "No reset request found for this account." });
+    }
+
+    if (Date.now() > user.resetCodeExpire) {
       return res.status(400).json({ message: "Your reset code has expired. Please request a new one." });
     }
 
@@ -119,9 +121,13 @@ exports.resetPassword = async (req, res) => {
     user.password = newPassword;
     user.resetCode = undefined;
     user.resetCodeExpire = undefined;
+
+    // ✅ Mark user as verified automatically after password reset
+    user.verified = true;
+
     await user.save();
 
-    res.json({ message: "Your password has been successfully reset." });
+    res.json({ message: "Your password has been successfully reset. You can now log in." });
   } catch (err) {
     console.error("Reset password error:", err.message);
     res.status(500).json({ message: "We were unable to reset your password. Please try again later." });
@@ -157,5 +163,3 @@ exports.verifyCode = async (req, res) => {
     res.status(500).json({ message: "We were unable to verify your email at this time. Please try again later." });
   }
 };
-
-module.exports = exports;
