@@ -4,20 +4,23 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const Brevo = require("@getbrevo/brevo"); // ✅ use require, not import
 const { PORT, MONGO_URI, CLIENT_URL } = require("./config");
-const orderRoutes = require("./routes/orderRoutes");
-app.use("/api/orders", orderRoutes);
 
+// ✅ Initialize Express first
 const app = express();
+
+// ✅ Import routes AFTER app is created
+const orderRoutes = require("./routes/orderRoutes");
+const authRoutes = require("./routes/authRoutes");
 
 // ===== Middleware =====
 app.use(express.json());
 
 // ✅ CORS configuration — allow both local + live frontend
 const allowedOrigins = [
-  CLIENT_URL, // from your .env (Render)
+  CLIENT_URL,
   "https://remfr.vercel.app",
-  "http://localhost:5173", // for Vite local dev
-  "http://127.0.0.1:5500" // VSCode Live Server
+  "http://localhost:5173",
+  "http://127.0.0.1:5500"
 ];
 
 app.use(
@@ -34,8 +37,9 @@ app.use(
   })
 );
 
-// ===== Auth Routes =====
-app.use("/api/auth", require("./routes/authRoutes"));
+// ===== Use routes =====
+app.use("/api/auth", authRoutes);
+app.use("/api/orders", orderRoutes);
 
 // ==============================
 // 🛒 ORDER NOTIFICATION ROUTE
@@ -67,7 +71,7 @@ app.post("/api/order", async (req, res) => {
     // ==========================
     const adminEmail = new Brevo.SendSmtpEmail();
     adminEmail.sender = { email: "no-reply@yourdomain.com", name: "Your Shop" };
-    adminEmail.to = [{ email: "youremail@example.com", name: "Store Admin" }]; // replace with your real admin email
+    adminEmail.to = [{ email: "youremail@example.com", name: "Store Admin" }]; // ✅ put your real admin email
     adminEmail.subject = `🛒 New Order from ${customerName}`;
     adminEmail.htmlContent = `
       <h2>New Order Received</h2>
@@ -101,7 +105,15 @@ app.post("/api/order", async (req, res) => {
 
     await brevo.sendTransacEmail(clientEmail);
 
-    res.status(200).json({ message: "Order notification sent successfully." });
+    // ✅ Optional: WhatsApp redirect
+    const whatsappUrl = `https://wa.me/254796485518?text=Hi%20${customerName},%20thank%20you%20for%20your%20order%20of%20Ksh%20${total.toFixed(
+      2
+    )}%20from%20Your%20Shop.%20Our%20team%20will%20contact%20you%20soon.`;
+
+    res.status(200).json({
+      message: "Order notification sent successfully.",
+      whatsappRedirect: whatsappUrl,
+    });
   } catch (error) {
     console.error("Error sending order email:", error);
     res.status(500).json({ message: "Failed to send order email." });
