@@ -19,11 +19,11 @@ const authRoutes = require("./routes/authRoutes");
 app.use(express.json());
 
 // CORS configuration
+const cors = require("cors");
 const allowedOrigins = [
-  CLIENT_URL,
-  "https://remfr.vercel.app",
-  "http://localhost:5173",
-  "http://127.0.0.1:5500",
+  "http://localhost:5173", // local dev (optional)
+  "http://127.0.0.1:5500", // if testing locally via Live Server
+  "https://remote-pro-jobs.vercel.app" // your actual Vercel frontend
 ];
 
 app.use(
@@ -39,6 +39,7 @@ app.use(
     credentials: true,
   })
 );
+
 
 // Routes
 app.use("/api/auth", authRoutes);
