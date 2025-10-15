@@ -6,23 +6,56 @@ const sendEmail = require("../utils/sendEmail");
 // ===== REGISTER =====
 exports.register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
-    const existingUser = await User.findOne({ email });
+    const { name, email, phone, password } = req.body;
+    console.log("Register request body:", { name, email, phone, password }); // Debugging
 
+    // Stricter validation
+    if (!name || !email || !phone || !password) {
+      return res.status(400).json({ message: "All fields are required: name, email, phone, and password.", missing: { name, email, phone, password } });
+    }
+
+    // For resend, allow email-only requests
+    if (req.body.email && !name && !phone && !password) {
+      let user = await User.findOne({ email });
+      if (!user) {
+        return res.status(400).json({ message: "No account found with this email." });
+      }
+      if (user.verified) {
+        return res.status(400).json({ message: "User already verified." });
+      }
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      user.verificationCode = code;
+      user.verificationCodeExpire = Date.now() + 10 * 60 * 1000;
+      await user.save();
+      console.log("Resent verification code for user:", user.email); // Debugging
+
+      await sendEmail(
+        email,
+        "Verify Your Email",
+        `<h3>Email Verification</h3>
+         <p>Your verification code is: <strong>${code}</strong></p>
+         <p>This code will expire in 10 minutes.</p>`
+      );
+      return res.status(200).json({ message: "Verification code resent." });
+    }
+
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: "This email is already registered. Please log in instead." });
     }
 
-    const user = new User({ name, email, password });
-    await user.save();
+    const user = new User({ name, email, phone, password });
+    await user.save().catch((err) => {
+      console.error("MongoDB save error:", err.message); // Debugging
+      throw err;
+    });
+    console.log("User saved to MongoDB:", user); // Debugging
 
-    // Generate verification code (valid for 10 minutes)
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     user.verificationCode = code;
     user.verificationCodeExpire = Date.now() + 10 * 60 * 1000;
     await user.save();
 
-    // Send verification email
     await sendEmail(
       email,
       "Verify Your Email",
@@ -34,7 +67,7 @@ exports.register = async (req, res) => {
     res.status(201).json({ message: "Registration successful. Please verify your email to continue." });
   } catch (err) {
     console.error("Register error:", err.message);
-    res.status(500).json({ message: "We encountered a problem while processing your registration. Please try again later." });
+    res.status(500).json({ message: "We encountered a problem while processing your registration. Please try again later.", error: err.message });
   }
 };
 
@@ -71,14 +104,13 @@ exports.forgotPassword = async (req, res) => {
     const { email } = req.body;
     const user = await User.findOne({ email });
 
-    // Neutral message to prevent user enumeration
     if (!user) {
       return res.json({ message: "If this email is registered, a reset code has been sent." });
     }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     user.resetCode = code;
-    user.resetCodeExpire = Date.now() + 10 * 60 * 1000; // 10 min
+    user.resetCodeExpire = Date.now() + 10 * 60 * 1000;
     await user.save();
 
     await sendEmail(
@@ -121,10 +153,7 @@ exports.resetPassword = async (req, res) => {
     user.password = newPassword;
     user.resetCode = undefined;
     user.resetCodeExpire = undefined;
-
-    // ✅ Mark user as verified automatically after password reset
     user.verified = true;
-
     await user.save();
 
     res.json({ message: "Your password has been successfully reset. You can now log in." });
@@ -161,5 +190,19 @@ exports.verifyCode = async (req, res) => {
   } catch (err) {
     console.error("Verify code error:", err.message);
     res.status(500).json({ message: "We were unable to verify your email at this time. Please try again later." });
+  }
+};
+
+// ===== GET USER PROFILE =====
+exports.getUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("-password -verificationCode -verificationCodeExpire -resetCode -resetCodeExpire");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.json({ success: true, user });
+  } catch (err) {
+    console.error("Get user error:", err.message);
+    res.status(500).json({ message: "Server error" });
   }
 };

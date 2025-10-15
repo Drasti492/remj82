@@ -2,16 +2,13 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
 const userSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
+  name: { type: String, required: true, trim: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  phone: { type: String, required: true, trim: true },
+  password: { type: String, required: true, minlength: 6 },
   verified: { type: Boolean, default: false },
-
-  // Email verification fields
   verificationCode: String,
   verificationCodeExpire: Date,
-
-  // Password reset fields (must match controller)
   resetCode: String,
   resetCodeExpire: Date,
 });

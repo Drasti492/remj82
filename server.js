@@ -2,25 +2,28 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const Brevo = require("@getbrevo/brevo"); // ✅ use require, not import
+const Brevo = require("@getbrevo/brevo");
 const { PORT, MONGO_URI, CLIENT_URL } = require("./config");
 
-// ✅ Initialize Express first
+// Initialize Express
 const app = express();
 
-// ✅ Import routes AFTER app is created
+// Set strict mode for schema validation
+mongoose.set("strict", true);
+
+// Import routes
 const orderRoutes = require("./routes/orderRoutes");
 const authRoutes = require("./routes/authRoutes");
 
-// ===== Middleware =====
+// Middleware
 app.use(express.json());
 
-// ✅ CORS configuration — allow both local + live frontend
+// CORS configuration
 const allowedOrigins = [
   CLIENT_URL,
   "https://remfr.vercel.app",
   "http://localhost:5173",
-  "http://127.0.0.1:5500"
+  "http://127.0.0.1:5500",
 ];
 
 app.use(
@@ -37,13 +40,11 @@ app.use(
   })
 );
 
-// ===== Use routes =====
+// Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/orders", orderRoutes);
 
-// ==============================
-// 🛒 ORDER NOTIFICATION ROUTE
-// ==============================
+// Order Notification Route
 const brevo = new Brevo.TransactionalEmailsApi();
 brevo.authentications["apiKey"].apiKey = process.env.BREVO_API_KEY;
 
@@ -66,12 +67,10 @@ app.post("/api/order", async (req, res) => {
       )
       .join("");
 
-    // ==========================
     // Email to Admin
-    // ==========================
     const adminEmail = new Brevo.SendSmtpEmail();
     adminEmail.sender = { email: "no-reply@yourdomain.com", name: "Your Shop" };
-    adminEmail.to = [{ email: "youremail@example.com", name: "Store Admin" }]; // ✅ put your real admin email
+    adminEmail.to = [{ email: "youremail@example.com", name: "Store Admin" }];
     adminEmail.subject = `🛒 New Order from ${customerName}`;
     adminEmail.htmlContent = `
       <h2>New Order Received</h2>
@@ -85,9 +84,7 @@ app.post("/api/order", async (req, res) => {
 
     await brevo.sendTransacEmail(adminEmail);
 
-    // ==========================
     // Email to Customer
-    // ==========================
     const clientEmail = new Brevo.SendSmtpEmail();
     clientEmail.sender = { email: "no-reply@yourdomain.com", name: "Your Shop" };
     clientEmail.to = [{ email: customerEmail, name: customerName }];
@@ -105,8 +102,10 @@ app.post("/api/order", async (req, res) => {
 
     await brevo.sendTransacEmail(clientEmail);
 
-    // ✅ Optional: WhatsApp redirect
-    const whatsappUrl = `https://wa.me/254796485518?text=Hi%20${customerName},%20thank%20you%20for%20your%20order%20of%20Ksh%20${total.toFixed(
+    // WhatsApp redirect
+    const whatsappUrl = `https://wa.me/254796485518?text=Hi%20${encodeURIComponent(
+      customerName
+    )},%20thank%20you%20for%20your%20order%20of%20Ksh%20${total.toFixed(
       2
     )}%20from%20Your%20Shop.%20Our%20team%20will%20contact%20you%20soon.`;
 
@@ -115,12 +114,12 @@ app.post("/api/order", async (req, res) => {
       whatsappRedirect: whatsappUrl,
     });
   } catch (error) {
-    console.error("Error sending order email:", error);
+    console.error("Error sending order email:", error.message);
     res.status(500).json({ message: "Failed to send order email." });
   }
 });
 
-// ===== MongoDB Connection =====
+// MongoDB Connection
 mongoose
   .connect(MONGO_URI, {
     useNewUrlParser: true,
@@ -131,6 +130,9 @@ mongoose
     const port = PORT || 4000;
     app.listen(port, () => console.log(`🚀 Server running on port ${port}`));
   })
-  .catch((err) => console.error("❌ MongoDB error:", err));
+  .catch((err) => {
+    console.error("❌ MongoDB error:", err.message);
+    process.exit(1); // Exit on connection failure
+  });
 
 module.exports = app;
