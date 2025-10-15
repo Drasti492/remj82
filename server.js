@@ -19,7 +19,6 @@ const authRoutes = require("./routes/authRoutes");
 app.use(express.json());
 
 // CORS configuration
-const cors = require("cors");
 const allowedOrigins = [
   "http://localhost:5173", // local dev (optional)
   "http://127.0.0.1:5500", // if testing locally via Live Server
