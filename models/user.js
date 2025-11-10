@@ -6,11 +6,18 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   phone: { type: String, required: true, trim: true },
   password: { type: String, required: true, minlength: 6 },
-  verified: { type: Boolean, default: false },
+
+  // Verification fields
+  verified: { type: Boolean, default: false }, // email verification
   verificationCode: String,
   verificationCodeExpire: Date,
   resetCode: String,
   resetCodeExpire: Date,
+
+  // Job application / manual verification fields
+  connects: { type: Number, default: 3 },            // Free users can apply 3 times
+  isManuallyVerified: { type: Boolean, default: false }, // Admin verifies users for unlimited applications
+  applications: [{ type: mongoose.Schema.Types.ObjectId, ref: "Job" }], // Track applied jobs
 });
 
 // Hash password before save
