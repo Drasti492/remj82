@@ -14,7 +14,8 @@ app.use(express.json());
 const allowedOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:5500",
-  "https://remote-pro-jobs.vercel.app"
+  "https://remote-pro-jobs.vercel.app",
+   "https://remoteprojobs.site" 
 ];
 
 app.use(
