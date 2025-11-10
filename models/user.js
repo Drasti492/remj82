@@ -17,15 +17,7 @@ const userSchema = new mongoose.Schema({
   // Job application / manual verification fields
   connects: { type: Number, default: 3 },
   isManuallyVerified: { type: Boolean, default: false },
-  applications: [
-    {
-      jobId: String,
-      title: String,
-      company: String,
-      description: String,
-      appliedAt: { type: Date, default: Date.now }
-    }
-  ],
+  applications: { type: Array, default: [] } // <-- ensure default empty array
 });
 
 // Hash password before save

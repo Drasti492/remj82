@@ -17,13 +17,16 @@ router.post("/apply/:jobId", auth, async (req, res) => {
             return res.status(400).json({ message: "Job information is missing." });
         }
 
+        // Ensure applications array exists
+        if (!Array.isArray(user.applications)) user.applications = [];
+
         // Prevent duplicate applications
-        const alreadyApplied = user.applications?.some(app => app.jobId === jobId);
+        const alreadyApplied = user.applications.some(app => app.jobId === jobId);
         if (alreadyApplied) {
             return res.status(400).json({ message: `You have already applied for ${title}.` });
         }
 
-        const applicationsCount = user.applications?.length || 0;
+        const applicationsCount = user.applications.length;
 
         // Handle free applications for unverified users
         if (!user.isManuallyVerified && applicationsCount >= 3) {
@@ -56,7 +59,7 @@ router.post("/apply/:jobId", auth, async (req, res) => {
         });
 
         res.json({
-            message: `✅ Application successful for "${title}"! Check your notifications for details.`,
+            message: `Application successful for "${title}"! Check your notifications for details.`,
             connectsRemaining: user.connects
         });
 
