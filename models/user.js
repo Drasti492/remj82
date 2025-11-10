@@ -1,3 +1,4 @@
+// models/user.js
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
@@ -6,14 +7,14 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   phone: { type: String, required: true, trim: true },
   password: { type: String, required: true, minlength: 6 },
-  verified: { type: Boolean, default: false },
+  verified: { type: Boolean, default: false }, // Auto or email verified
+  isManuallyVerified: { type: Boolean, default: false }, // Admin verified
   verificationCode: String,
   verificationCodeExpire: Date,
   resetCode: String,
   resetCodeExpire: Date,
   connects: { type: Number, default: 3 },
-  isManuallyVerified: { type: Boolean, default: false },
-  applications: [{ type: Object }] // Store jobId, title, company, description
+  applications: [{ type: Object }]
 });
 
 userSchema.pre("save", async function (next) {

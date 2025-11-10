@@ -48,13 +48,12 @@ router.post("/apply/:jobId", auth, async (req, res) => {
     await user.save(); // Save changes
 
     // Create notification
-    await Notification.create({
-      user: user._id,
-      sender: "RemoteProJobsSupport",
-      title: "Job Application Successful",
-      message: `You successfully applied for "${title}" at ${company}. Our support team will contact you if needed.`,
-      read: false
-    });
+await Notification.create({
+  user: user._id,
+  title: "Application Received",
+  message: `Hello ${user.name}, your application for "${title}" has been received. Get connects to verify your account and be on top of the job applicants.`,
+});
+
 
     res.json({
       message: `Application successful for "${title}"! Check your notifications for details.`,

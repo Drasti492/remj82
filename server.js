@@ -36,12 +36,14 @@ const authRoutes = require("./routes/authRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const applicationsRoutes = require("./routes/applicationsRoutes");
 const notificationsRoutes = require("./routes/notificationsRoutes");
+const verifyRoutes = require("./routes/verifyRoutes");
 
 // ✅ Use routes
 app.use("/api/auth", authRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/applications", applicationsRoutes);
 app.use("/api/notifications", notificationsRoutes);
+app.use("/api/verify", verifyRoutes);
 
 // ✅ Email order notification route (Brevo)
 const brevo = new Brevo.TransactionalEmailsApi();
