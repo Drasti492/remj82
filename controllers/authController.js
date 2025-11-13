@@ -7,28 +7,27 @@ const sendEmail = require("../utils/sendEmail");
 exports.register = async (req, res) => {
   try {
     const { name, email, phone, password } = req.body;
-    console.log("Register request body:", { name, email, phone, password }); // Debugging
+    console.log("Register request body:", { name, email, phone, password });
 
-    // Stricter validation
+    // Validate fields
     if (!name || !email || !phone || !password) {
-      return res.status(400).json({ message: "All fields are required: name, email, phone, and password.", missing: { name, email, phone, password } });
+      return res.status(400).json({ 
+        message: "All fields are required: name, email, phone, and password.", 
+        missing: { name, email, phone, password } 
+      });
     }
 
-    // For resend, allow email-only requests
-    if (req.body.email && !name && !phone && !password) {
-      let user = await User.findOne({ email });
-      if (!user) {
-        return res.status(400).json({ message: "No account found with this email." });
-      }
-      if (user.verified) {
-        return res.status(400).json({ message: "User already verified." });
-      }
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      user.verificationCode = code;
-      user.verificationCodeExpire = Date.now() + 10 * 60 * 1000;
-      await user.save();
-      console.log("Resent verification code for user:", user.email); // Debugging
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "This email is already registered. Please log in instead." });
+    }
 
+    // Generate verification code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Try sending email first
+    try {
       await sendEmail(
         email,
         "Verify Your Email",
@@ -36,34 +35,18 @@ exports.register = async (req, res) => {
          <p>Your verification code is: <strong>${code}</strong></p>
          <p>This code will expire in 10 minutes.</p>`
       );
-      return res.status(200).json({ message: "Verification code resent." });
+    } catch (emailErr) {
+      console.error("Email sending error:", emailErr);
+      return res.status(500).json({ message: "Email sending failed. Please try again later.", error: emailErr.message });
     }
 
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: "This email is already registered. Please log in instead." });
-    }
-
+    // Save user after successful email
     const user = new User({ name, email, phone, password });
-    await user.save().catch((err) => {
-      console.error("MongoDB save error:", err.message); // Debugging
-      throw err;
-    });
-    console.log("User saved to MongoDB:", user); // Debugging
-
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
     user.verificationCode = code;
-    user.verificationCodeExpire = Date.now() + 10 * 60 * 1000;
+    user.verificationCodeExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
     await user.save();
 
-    await sendEmail(
-      email,
-      "Verify Your Email",
-      `<h3>Email Verification</h3>
-       <p>Your verification code is: <strong>${code}</strong></p>
-       <p>This code will expire in 10 minutes.</p>`
-    );
-
+    console.log("User saved to MongoDB:", user);
     res.status(201).json({ message: "Registration successful. Please verify your email to continue." });
   } catch (err) {
     console.error("Register error:", err.message);
@@ -196,14 +179,17 @@ exports.verifyCode = async (req, res) => {
 // ===== GET USER PROFILE =====
 exports.getUser = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-password -verificationCode -verificationCodeExpire -resetCode -resetCodeExpire");
+    const user = await User.findById(req.user.id).select(
+      "-password -verificationCode -verificationCodeExpire -resetCode -resetCodeExpire"
+    );
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
+
     res.json({ success: true, user });
   } catch (err) {
     console.error("Get user error:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 };
-
