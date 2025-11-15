@@ -28,8 +28,9 @@ router.post("/apply/:jobId", auth, async (req, res) => {
 
     // Free applications for unverified users
     if (!user.isManuallyVerified && applicationsCount >= 3) {
-      return res.status(403).json({
-        message: "You’ve used your 3 free applications. Please buy connects to apply more."
+      return res.status(200).json({
+        outOfConnects: true,
+        message: "You've used your 3 free applications. Get connects to apply more."
       });
     }
 
@@ -40,22 +41,23 @@ router.post("/apply/:jobId", auth, async (req, res) => {
       user.connects -= 1;
       user.applications.push({ jobId, title, company, description });
     } else {
-      return res.status(403).json({
-        message: `You have no connects left. Please buy connects to apply for ${title}.`
+      return res.status(200).json({
+        outOfConnects: true,
+        message: `You have no connects left. Get connects to apply for ${title}.`
       });
     }
 
-    await user.save(); // Save changes
+    await user.save();
 
     // Create notification
-await Notification.create({
-  user: user._id,
-  title: "Application Received",
-  message: `Hello ${user.name}, your application for "${title}" has been received. Get connects to verify your account and be on top of the job applicants.`,
-});
-
+    await Notification.create({
+      user: user._id,
+      title: "Application Received",
+      message: `Hello ${user.name}, your application for "${title}" has been received. Get connects to verify your account and be on top of the job applicants.`,
+    });
 
     res.json({
+      success: true,
       message: `Application successful for "${title}"! Check your notifications for details.`,
       connectsRemaining: user.connects
     });
