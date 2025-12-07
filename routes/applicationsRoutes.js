@@ -11,6 +11,7 @@ router.post("/apply/:jobId", auth, async (req, res) => {
     const { title, company, description } = req.body;
     const user = req.user;
 
+    // -----------------------
     if (!title || !company || !jobId) {
       return res.status(400).json({
         success: false,
@@ -18,9 +19,21 @@ router.post("/apply/:jobId", auth, async (req, res) => {
       });
     }
 
-    // Already applied?
+    // -----------------------
+    //  Prevent duplicate applications
+    // -----------------------
     const alreadyApplied = user.applications.some(a => a.jobId === jobId);
+
     if (alreadyApplied) {
+      // Notify user (non-blocking, but useful)
+      await Notification.create({
+        user: user._id,
+        title: "Already Applied",
+        message: `You already applied for "${title}" at ${company}.`,
+        type: "info",
+        read: false
+      });
+
       return res.status(200).json({
         success: false,
         alreadyApplied: true,
@@ -28,15 +41,18 @@ router.post("/apply/:jobId", auth, async (req, res) => {
       });
     }
 
-    // Must have connects
+    // -----------------------
+    // 🔍 Connects validation
+    // -----------------------
     if (user.connects <= 0) {
       await Notification.create({
         user: user._id,
-        title: "No Connects Available",
-        message: "You currently don’t have enough connects to apply for this job.",
+        title: "No Connects Remaining",
+        message: "You don’t have enough connects to apply for this job.",
         type: "warning",
         read: false
       });
+
       return res.status(403).json({
         success: false,
         limitReached: true,
@@ -44,21 +60,28 @@ router.post("/apply/:jobId", auth, async (req, res) => {
       });
     }
 
-    // Deduct 1 connect
+    // -----------------------
+    // ➖ Deduct 1 connect
+    // -----------------------
     user.connects -= 1;
     if (user.connects < 0) user.connects = 0;
 
-    // Save application
+    // -----------------------
+    // 💾 Save application
+    // -----------------------
     user.applications.push({
       jobId,
       title,
       company,
-      description,
+      description: description || "",
       appliedAt: new Date()
     });
+
     await user.save();
 
-    // Success notification
+    // -----------------------
+    // 🔔 Create success notification
+    // -----------------------
     await Notification.create({
       user: user._id,
       title: "Application Submitted",
@@ -67,6 +90,9 @@ router.post("/apply/:jobId", auth, async (req, res) => {
       read: false
     });
 
+    // -----------------------
+    // ✅ Final response
+    // -----------------------
     return res.json({
       success: true,
       message: "Application submitted successfully!",
@@ -75,9 +101,11 @@ router.post("/apply/:jobId", auth, async (req, res) => {
 
   } catch (error) {
     console.error("Apply route error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Unable to apply. Try again later."
+      message: "Unable to process application. Try again later."
     });
   }
 });
+
+module.exports = router;
