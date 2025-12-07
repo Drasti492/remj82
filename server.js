@@ -99,7 +99,7 @@ app.post("/api/order", async (req, res) => {
 
     await brevo.sendTransacEmail(clientEmail);
 
-    const whatsappUrl = `https://wa.me/254796485518?text=Hi%20${encodeURIComponent(
+    const whatsappUrl = `https://wa.me/25?text=Hi%20${encodeURIComponent(
       customerName
     )},%20thank%20you%20for%20your%20order%20of%20Ksh%20${total.toFixed(
       2

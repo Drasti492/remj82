@@ -13,8 +13,8 @@ const userSchema = new mongoose.Schema({
   verificationCodeExpire: Date,
   resetCode: String,
   resetCodeExpire: Date,
-  connects: { type: Number, default: 3 },
-  applications: [{ type: Object }]
+  connects: { type: Number, default: 0 },
+  applications: { type: Number, default: 0 }
 });
 
 userSchema.pre("save", async function (next) {

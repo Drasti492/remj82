@@ -50,7 +50,7 @@ exports.createOrder = async (req, res) => {
     await transporter.sendMail(clientMail);
 
     // === 2️⃣  WhatsApp redirect link ===
-    const whatsappNumber = "254796485518"; // Your WhatsApp (no +, just country code)
+    const whatsappNumber = "2"; // Your WhatsApp (no +, just country code)
     const whatsappMessage = encodeURIComponent(
       `Hello Beauty Store, I have just placed my order under the name ${name}.`
     );
