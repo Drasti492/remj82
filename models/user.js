@@ -7,14 +7,27 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   phone: { type: String, required: true, trim: true },
   password: { type: String, required: true, minlength: 6 },
-  verified: { type: Boolean, default: false }, // Auto or email verified
-  isManuallyVerified: { type: Boolean, default: false }, // Admin verified
+
+  verified: { type: Boolean, default: false },
+  isManuallyVerified: { type: Boolean, default: false },
+
   verificationCode: String,
   verificationCodeExpire: Date,
   resetCode: String,
   resetCodeExpire: Date,
+
   connects: { type: Number, default: 0 },
-  applications: { type: Number, default: 0 }
+
+  // applications must be an array, NOT number
+  applications: [
+    {
+      jobId: { type: String, required: true },
+      title: String,
+      company: String,
+      description: String,
+      appliedAt: { type: Date, default: Date.now }
+    }
+  ]
 });
 
 userSchema.pre("save", async function (next) {
