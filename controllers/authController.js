@@ -165,7 +165,14 @@ exports.getUser = async (req, res) => {
 
     if (!user) return res.status(404).json({ message: "User not found." });
 
-    res.json({ success: true, user });
+    res.json({
+  success: true,
+  user: {
+    ...user._doc,
+    totalApplications: user.applications.length // ⭐ FRONTEND NEEDS THIS
+  }
+});
+
   } catch (err) {
     console.error("Get user error:", err);
     res.status(500).json({ message: "Server error while fetching user." });

@@ -1,4 +1,3 @@
-// models/user.js
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
@@ -18,7 +17,10 @@ const userSchema = new mongoose.Schema({
 
   connects: { type: Number, default: 0 },
 
-  // applications must be an array, NOT number
+  // ⭐ NEW FIELD: user wallet balance
+  balance: { type: Number, default: 0 },
+
+  // Job applications array
   applications: [
     {
       jobId: { type: String, required: true },
