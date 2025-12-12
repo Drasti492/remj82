@@ -4,13 +4,13 @@ const Notification = require("../models/notification");
 const jwt = require("jsonwebtoken");
 const sendEmail = require("../utils/sendEmail");
 
-// ===== REGISTER =====
+// REGISTER — DO NOT SET verified = true
 exports.register = async (req, res) => {
   try {
     const { name, email, phone, password } = req.body;
 
     if (!name || !email || !phone || !password) {
-      return res.status(400).json({ message: "All fields are required." });
+      return res.status(res.status(400).json({ message: "All fields are required." }));
     }
 
     const existingUser = await User.findOne({ email });
@@ -20,40 +20,36 @@ exports.register = async (req, res) => {
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Send verification email
-    try {
-      await sendEmail(email, "Verify Your Email", `
-        <h3>Email Verification</h3>
-        <p>Your verification code is: <strong>${code}</strong></p>
-        <p>This code will expire in 10 minutes.</p>
-      `);
-    } catch (err) {
-      console.error("Email sending error:", err);
-      return res.status(500).json({ message: "Failed to send email.", error: err.message });
-    }
+    await sendEmail(email, "Verify Your Email", `
+      <h3>Welcome to RemoteProJobs</h3>
+      <p>Your verification code is: <strong>${code}</strong></p>
+      <p>Expires in 10 minutes.</p>
+    `);
 
-    const user = new User({ name, email, phone, password });
-    user.verificationCode = code;
-    user.verificationCodeExpire = Date.now() + 10 * 60 * 1000; // 10 mins
-    await user.save();
-
-    // Welcome notification
-    await Notification.create({
-      user: user._id,
-      title: "Welcome to JobHub!",
-      message: "Your account has been created. Buy or receive connects anytime to start applying for jobs!",
-      type: "info",
-      read: false
+    const user = new User({ 
+      name, email, phone, password,
+      verified: false,           // ← ALWAYS FALSE
+      isManuallyVerified: false  // ← ONLY YOU CHANGE THIS
     });
 
+    user.verificationCode = code;
+    user.verificationCodeExpire = Date.now() + 10 * 60 * 1000;
+    await user.save();
+
+    await Notification.create({
+      user: user._id,
+      title: "Welcome!",
+      message: "Your account is created. Wait for admin approval to get verified.",
+      type: "info"
+    });
+    
     res.status(201).json({ message: "Registration successful. Please verify your email." });
   } catch (err) {
-    console.error("Register error:", err);
-    res.status(500).json({ message: "Server error during registration.", error: err.message });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
-// ===== LOGIN =====
+// LOGIN — ONLY ALLOW LOGIN IF MANUALLY VERIFIED
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -63,136 +59,100 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: "Incorrect email or password." });
     }
 
-    if (!user.verified) {
-      return res.status(400).json({ message: "Your email has not been verified." });
+    // ONLY ALLOW LOGIN IF YOU MANUALLY VERIFIED THEM
+    if (!user.isManuallyVerified) {
+      return res.status(403).json({ 
+        message: "Your account is pending admin approval. Please wait." 
+      });
     }
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
-    res.json({ message: "Login successful", token });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+
+    res.json({ 
+      message: "Login successful", 
+      token,
+      user: {
+        name: user.name,
+        email: user.email,
+        isManuallyVerified: user.isManuallyVerified
+      }
+    });
   } catch (err) {
-    console.error("Login error:", err);
-    res.status(500).json({ message: "Server error during login." });
+    res.status(500).json({ message: "Server error" });
   }
 };
 
-// ===== LOGOUT =====
-exports.logout = (req, res) => {
-  res.json({ message: "Logout successful" });
-};
-
-// ===== FORGOT PASSWORD =====
-exports.forgotPassword = async (req, res) => {
+// ===== LOGIN — ONLY ALLOW IF YOU MANUALLY VERIFIED THEM =====
+exports.login = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, password } = req.body;
     const user = await User.findOne({ email });
 
-    if (!user) {
-      return res.json({ message: "If this email is registered, a reset code has been sent." });
+    if (!user || !(await user.comparePassword(password))) {
+      return res.status(400).json({ message: "Incorrect email or password." });
     }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    user.resetCode = code;
-    user.resetCodeExpire = Date.now() + 10 * 60 * 1000;
-    await user.save();
-
-    await sendEmail(email, "Password Reset Code", `
-      <h3>Reset Your Password</h3>
-      <p>Your reset code is: <strong>${code}</strong></p>
-      <p>This code will expire in 10 minutes.</p>
-    `);
-
-    res.json({ message: "If this email is registered, a reset code has been sent." });
-  } catch (err) {
-    console.error("Forgot password error:", err);
-    res.status(500).json({ message: "Server error while processing request." });
-  }
-};
-
-// ===== RESET PASSWORD =====
-exports.resetPassword = async (req, res) => {
-  try {
-    const { email, code, newPassword } = req.body;
-    const user = await User.findOne({ email });
-
-    if (!user) return res.status(400).json({ message: "No account found with this email." });
-    if (!user.resetCode || !user.resetCodeExpire) return res.status(400).json({ message: "No reset request found." });
-    if (Date.now() > user.resetCodeExpire) return res.status(400).json({ message: "Reset code expired." });
-    if (user.resetCode !== code) return res.status(400).json({ message: "Invalid reset code." });
-
-    user.password = newPassword;
-    user.resetCode = undefined;
-    user.resetCodeExpire = undefined;
-    user.verified = true;
-    await user.save();
-
-    res.json({ message: "Password reset successful. You can now log in." });
-  } catch (err) {
-    console.error("Reset password error:", err);
-    res.status(500).json({ message: "Server error while resetting password." });
-  }
-};
-
-// ===== VERIFY EMAIL CODE =====
-exports.verifyCode = async (req, res) => {
-  try {
-    const { email, code } = req.body;
-    const user = await User.findOne({ email });
-
-    if (!user) return res.status(400).json({ message: "Account not found." });
-    if (!user.verificationCodeExpire || Date.now() >= Number(user.verificationCodeExpire)) {
-      return res.status(400).json({ message: "Verification code expired." });
+    // ONLY LET THEM LOG IN IF YOU MANUALLY VERIFIED THEM
+    if (!user.isManuallyVerified) {
+      return res.status(403).json({ 
+        message: "Your account is pending admin approval. Please wait." 
+      });
     }
-    if (user.verificationCode !== code) return res.status(400).json({ message: "Invalid verification code." });
 
-    user.verified = true;
-    user.verificationCode = undefined;
-    user.verificationCodeExpire = undefined;
-    await user.save();
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
-    res.json({ message: "Email verified successfully." });
+    res.json({ 
+      message: "Login successful", 
+      token,
+      user: {
+        name: user.name,
+        email: user.email,
+        isManuallyVerified: true
+      }
+    });
   } catch (err) {
-    console.error("Verify code error:", err);
-    res.status(500).json({ message: "Server error during email verification." });
+    res.status(500).json({ message: "Server error" });
   }
 };
 
-// ===== GET USER PROFILE =====
-exports.getUser = async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select(
-      "-password -verificationCode -verificationCodeExpire -resetCode -resetCodeExpire"
-    );
-
-    if (!user) return res.status(404).json({ message: "User not found." });
-
-    res.json({
-  success: true,
-  user: {
-    ...user._doc,
-    totalApplications: user.applications.length // ⭐ FRONTEND NEEDS THIS
-  }
-});
-
-  } catch (err) {
-    console.error("Get user error:", err);
-    res.status(500).json({ message: "Server error while fetching user." });
-  }
-};
-
-// ===== MANUALLY VERIFY USER =====
+// ADMIN ONLY — THIS IS HOW YOU VERIFY USERS
 exports.verifyUserManually = async (req, res) => {
   try {
     const { userId } = req.body;
     const user = await User.findById(userId);
 
-    if (!user) return res.status(404).json({ message: "User not found." });
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    user.verified = true;
+    user.isManuallyVerified = true;
+    // DO NOT TOUCH 'verified' field — it's meaningless now
     await user.save();
 
-    res.json({ message: "User has been manually verified." });
+    await Notification.create({
+      user: user._id,
+      title: "Account Verified!",
+      message: "Congratulations! Your account is now fully verified.",
+      type: "success"
+    });
+
+    res.json({ message: "User manually verified successfully" });
   } catch (err) {
-    console.error("Manual verify error:", err);
-    res.status(500).json({ message: "Server error during manual verification." });
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// GET USER — returns correct status
+exports.getUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("-password -verificationCode -resetCode");
+    
+    res.json({
+      success: true,
+      user: {
+        ...user._doc,
+        totalApplications: user.applications.length
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
   }
 };
