@@ -9,6 +9,12 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true, minlength: 6 },
 
   verified: { type: Boolean, default: false },
+  role: {
+  type: String,
+  enum: ["user", "admin"],
+  default: "user"
+},
+
   isManuallyVerified: { type: Boolean, default: false },
 
   verificationCode: String,
@@ -28,6 +34,8 @@ const userSchema = new mongoose.Schema({
       appliedAt: { type: Date, default: Date.now }
     }
   ]
+
+  
 });
 
 userSchema.pre("save", async function (next) {
@@ -39,5 +47,6 @@ userSchema.pre("save", async function (next) {
 userSchema.methods.comparePassword = async function (password) {
   return bcrypt.compare(password, this.password);
 };
+
 
 module.exports = mongoose.model("User", userSchema);

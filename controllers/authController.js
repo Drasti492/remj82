@@ -171,21 +171,3 @@ exports.getUser = async (req, res) => {
     res.status(500).json({ message: "Server error while fetching user." });
   }
 };
-
-// ===== MANUALLY VERIFY USER =====
-exports.verifyUserManually = async (req, res) => {
-  try {
-    const { userId } = req.body;
-    const user = await User.findById(userId);
-
-    if (!user) return res.status(404).json({ message: "User not found." });
-
-    user.verified = true;
-    await user.save();
-
-    res.json({ message: "User has been manually verified." });
-  } catch (err) {
-    console.error("Manual verify error:", err);
-    res.status(500).json({ message: "Server error during manual verification." });
-  }
-};

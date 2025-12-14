@@ -45,6 +45,7 @@ const orderRoutes = require("./routes/orderRoutes");
 const applicationsRoutes = require("./routes/applicationsRoutes");
 const notificationsRoutes = require("./routes/notificationsRoutes");
 const verifyRoutes = require("./routes/verifyRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 // ------------------------------------
 // Attach Routes
@@ -54,7 +55,7 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/applications", applicationsRoutes);
 app.use("/api/notifications", notificationsRoutes);
 app.use("/api/verify", verifyRoutes);
-
+app.use("/api/admin", adminRoutes);
 // ------------------------------------
 // Brevo Email (Order Notification)
 // ------------------------------------

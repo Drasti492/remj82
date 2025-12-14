@@ -21,7 +21,6 @@ router.patch("/manual/:userId", async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
 
     user.isManuallyVerified = true;
-    user.verified = true; // ensure verified flag is also true
     await user.save();
 
     res.json({ message: `✅ ${user.name} has been manually verified.`, user });
@@ -37,7 +36,6 @@ router.patch("/unverify/:userId", async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
 
     user.isManuallyVerified = false;
-    user.verified = false;
     await user.save();
 
     res.json({ message: `❌ ${user.name} has been unverified.`, user });
