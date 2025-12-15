@@ -5,16 +5,13 @@ const jwt = require("jsonwebtoken");
 const sendEmail = require("../utils/sendEmail");
 
 // ===============================
-// HELPERS
+// PASSWORD STRENGTH CHECK
 // ===============================
 const isStrongPassword = (password) => {
-  // Example valid: A258100b
-  const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d]{8,}$/;
-  return regex.test(password);
-};
-
-const isValidPhone = (phone) => {
-  return /^\+?[0-9]{8,15}$/.test(phone);
+  // At least 8 chars, 1 uppercase, 1 lowercase, 1 number
+  const strongRegex =
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$!%*?&]{8,}$/;
+  return strongRegex.test(password);
 };
 
 // ===============================
@@ -28,16 +25,11 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: "All fields are required." });
     }
 
+    // 🔐 Password rule
     if (!isStrongPassword(password)) {
       return res.status(400).json({
         message:
           "Password must be at least 8 characters and include uppercase, lowercase, and a number."
-      });
-    }
-
-    if (!isValidPhone(phone)) {
-      return res.status(400).json({
-        message: "Phone number must be numeric and 8–15 digits."
       });
     }
 
@@ -48,6 +40,7 @@ exports.register = async (req, res) => {
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
+    // Send verification email
     await sendEmail(
       email,
       "Verify Your Email",
@@ -59,27 +52,31 @@ exports.register = async (req, res) => {
     `
     );
 
-    const user = await User.create({
+    const user = new User({
       name,
       email,
       phone,
       password,
-      verificationCode: code,
-      verificationCodeExpire: Date.now() + 10 * 60 * 1000,
-      verified: false
+      verified: false,
+      isManuallyVerified: false
     });
 
+    user.verificationCode = code;
+    user.verificationCodeExpire = Date.now() + 10 * 60 * 1000;
+    await user.save();
+
+    // Welcome notification
     await Notification.create({
       user: user._id,
-      title: "Welcome to Remote Pro Jobs",
+      title: "Welcome to RemoteProJobs",
       message:
-        "Your account has been created successfully. Verify your email to start applying for jobs.",
+        "Your account has been created. Please verify your email to continue.",
       read: false
     });
 
     res.status(201).json({
       message: "Registration successful. Please verify your email.",
-      email: user.email // ⭐ frontend stores this
+      email // 👈 frontend stores this
     });
   } catch (err) {
     console.error("Register error:", err);
@@ -88,31 +85,46 @@ exports.register = async (req, res) => {
 };
 
 // ===============================
-// LOGIN
+// RESEND VERIFICATION CODE (🔥 FIX)
 // ===============================
-exports.login = async (req, res) => {
+exports.resendVerification = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required." });
+    }
+
     const user = await User.findOne({ email });
-
-    if (!user || !(await user.comparePassword(password))) {
-      return res.status(400).json({ message: "Incorrect email or password." });
+    if (!user) {
+      return res.status(404).json({ message: "Account not found." });
     }
 
-    if (!user.verified) {
-      return res.status(403).json({ message: "Please verify your email first." });
+    if (user.verified) {
+      return res.status(400).json({ message: "Email already verified." });
     }
 
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+    user.verificationCode = code;
+    user.verificationCodeExpire = Date.now() + 10 * 60 * 1000;
+    await user.save();
+
+    await sendEmail(
+      email,
+      "Resend Verification Code",
+      `
+      <h3>Email Verification</h3>
+      <p>Your new verification code:</p>
+      <h2>${code}</h2>
+      <p>Expires in 10 minutes.</p>
+    `
     );
 
-    res.json({ message: "Login successful", token });
+    res.json({ message: "Verification code resent successfully." });
   } catch (err) {
-    console.error("Login error:", err);
-    res.status(500).json({ message: "Server error during login." });
+    console.error("Resend verification error:", err);
+    res.status(500).json({ message: "Failed to resend verification code." });
   }
 };
 
@@ -122,10 +134,9 @@ exports.login = async (req, res) => {
 exports.verifyCode = async (req, res) => {
   try {
     const { email, code } = req.body;
-    const user = await User.findOne({ email });
 
-    if (!user) return res.status(404).json({ message: "Account not found." });
-    if (user.verified) return res.json({ message: "Email already verified." });
+    const user = await User.findOne({ email });
+    if (!user) return res.status(400).json({ message: "Account not found." });
 
     if (
       !user.verificationCode ||
@@ -146,50 +157,74 @@ exports.verifyCode = async (req, res) => {
     res.json({ message: "Email verified successfully." });
   } catch (err) {
     console.error("Verify error:", err);
-    res.status(500).json({ message: "Server error during verification." });
+    res.status(500).json({ message: "Verification failed." });
   }
 };
 
 // ===============================
-// RESEND VERIFICATION CODE
+// LOGIN
 // ===============================
-exports.resendVerification = async (req, res) => {
+exports.login = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, password } = req.body;
+
     const user = await User.findOne({ email });
+    if (!user || !(await user.comparePassword(password))) {
+      return res.status(400).json({ message: "Invalid email or password." });
+    }
 
-    if (!user) return res.status(404).json({ message: "Account not found." });
-    if (user.verified)
-      return res.json({ message: "Email already verified." });
+    if (!user.verified) {
+      return res.status(403).json({ message: "Please verify your email." });
+    }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-
-    user.verificationCode = code;
-    user.verificationCodeExpire = Date.now() + 10 * 60 * 1000;
-    await user.save();
-
-    await sendEmail(
-      email,
-      "Your New Verification Code",
-      `<h2>${code}</h2><p>This code expires in 10 minutes.</p>`
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
     );
 
-    res.json({ message: "Verification code resent." });
+    res.json({ message: "Login successful", token });
   } catch (err) {
-    console.error("Resend error:", err);
-    res.status(500).json({ message: "Server error while resending code." });
+    console.error("Login error:", err);
+    res.status(500).json({ message: "Login failed." });
   }
 };
 
 // ===============================
-// GET USER
+// GET LOGGED-IN USER
 // ===============================
 exports.getUser = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-password");
+    const user = await User.findById(req.user._id).select(
+      "-password -verificationCode -verificationCodeExpire"
+    );
+
     if (!user) return res.status(404).json({ message: "User not found." });
+
     res.json({ success: true, user });
   } catch (err) {
-    res.status(500).json({ message: "Server error." });
+    console.error("Get user error:", err);
+    res.status(500).json({ message: "Failed to fetch user." });
   }
+};
+
+// ===============================
+// LOGOUT (STATeless)
+// ===============================
+exports.logout = (req, res) => {
+  res.json({ message: "Logout successful." });
+};
+
+// ===============================
+// FORGOT PASSWORD
+// ===============================
+exports.forgotPassword = async (req, res) => {
+  res.json({ message: "Feature coming soon." });
+};
+
+// ===============================
+// RESET PASSWORD
+// ===============================
+exports.resetPassword = async (req, res) => {
+  res.json({ message: "Feature coming soon." });
 };
