@@ -57,6 +57,7 @@ app.use("/api/notifications", notificationsRoutes);
 app.use("/api/verify", verifyRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/withdrawals", withdrawalRoutes);
+app.use("/api/payments", require("./routes/paymentRoutes"));
 // ------------------------------------
 // Brevo Email (Order Notification)
 // ------------------------------------
