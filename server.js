@@ -3,7 +3,6 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const Brevo = require("@getbrevo/brevo");
-
 const { PORT, MONGO_URI } = require("./config");
 
 const app = express();
@@ -46,6 +45,7 @@ const applicationsRoutes = require("./routes/applicationsRoutes");
 const notificationsRoutes = require("./routes/notificationsRoutes");
 const verifyRoutes = require("./routes/verifyRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const withdrawalRoutes = require("./routes/withdrawalRoutes");
 
 // ------------------------------------
 // Attach Routes
@@ -56,6 +56,7 @@ app.use("/api/applications", applicationsRoutes);
 app.use("/api/notifications", notificationsRoutes);
 app.use("/api/verify", verifyRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/withdrawals", withdrawalRoutes);
 // ------------------------------------
 // Brevo Email (Order Notification)
 // ------------------------------------
