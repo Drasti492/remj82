@@ -16,6 +16,7 @@ exports.stkPush = async (req, res) => {
       return res.status(400).json({ message: "Phone number is required" });
     }
 
+    // Normalize phone number
     phone = phone.replace(/\s+/g, "");
     if (phone.startsWith("0")) phone = "254" + phone.slice(1);
 
@@ -24,14 +25,11 @@ exports.stkPush = async (req, res) => {
     }
 
     const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    if (!user.verified) {
-      return res.status(403).json({
-        message: "Please verify your email before making payment"
-      });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
     }
 
+    // Prevent paying twice if still active
     if (user.verifiedUntil && user.verifiedUntil > new Date()) {
       return res.status(400).json({
         message: "Your premium access is still active"
@@ -44,7 +42,7 @@ exports.stkPush = async (req, res) => {
       channel: process.env.PAYHERO_CHANNEL_ID
     });
 
-    const response = await axios.post(
+    await axios.post(
       "https://backend.payhero.co.ke/api/v2/payments",
       {
         amount: PAYMENT_AMOUNT_KES,
@@ -56,26 +54,23 @@ exports.stkPush = async (req, res) => {
       },
       {
         headers: {
-          Authorization: `Basic ${process.env.PAYHERO_BASIC_AUTH}`,
+          Authorization: process.env.PAYHERO_BASIC_AUTH,
           "Content-Type": "application/json"
         },
         timeout: 15000
       }
     );
 
-    console.log("✅ PayHero response:", response.data);
-
     return res.json({
       message: "STK prompt sent successfully"
     });
   } catch (err) {
     console.error("❌ STK PUSH FAILED");
+    console.error("MESSAGE:", err.message);
 
     if (err.response) {
       console.error("STATUS:", err.response.status);
       console.error("DATA:", err.response.data);
-    } else {
-      console.error("ERROR:", err.message);
     }
 
     return res.status(500).json({
@@ -83,6 +78,7 @@ exports.stkPush = async (req, res) => {
     });
   }
 };
+
 
 // ===================================
 // PAYHERO CALLBACK
