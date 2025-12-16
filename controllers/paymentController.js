@@ -16,7 +16,6 @@ exports.stkPush = async (req, res) => {
       return res.status(400).json({ message: "Phone number is required" });
     }
 
-    // Normalize phone number (07xx -> 2547xx)
     phone = phone.replace(/\s+/g, "");
     if (phone.startsWith("0")) phone = "254" + phone.slice(1);
 
@@ -27,21 +26,24 @@ exports.stkPush = async (req, res) => {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Must be email-verified
     if (!user.verified) {
       return res.status(403).json({
         message: "Please verify your email before making payment"
       });
     }
 
-    // Prevent double active verification
     if (user.verifiedUntil && user.verifiedUntil > new Date()) {
       return res.status(400).json({
         message: "Your premium access is still active"
       });
     }
 
-    // Send STK Push via PayHero
+    console.log("📲 Initiating STK Push:", {
+      phone,
+      amount: PAYMENT_AMOUNT_KES,
+      channel: process.env.PAYHERO_CHANNEL_ID
+    });
+
     const response = await axios.post(
       "https://backend.payhero.co.ke/api/v2/payments",
       {
@@ -56,24 +58,26 @@ exports.stkPush = async (req, res) => {
         headers: {
           Authorization: `Basic ${process.env.PAYHERO_BASIC_AUTH}`,
           "Content-Type": "application/json"
-        }
+        },
+        timeout: 15000
       }
     );
 
-    if (!response.data || response.data.status !== "queued") {
-      return res.status(400).json({
-        message: "Failed to initiate STK push"
-      });
-    }
+    console.log("✅ PayHero response:", response.data);
 
     return res.json({
       message: "STK prompt sent successfully"
     });
   } catch (err) {
-    console.error(
-      "STK PUSH ERROR:",
-      err.response?.data || err.message
-    );
+    console.error("❌ STK PUSH FAILED");
+
+    if (err.response) {
+      console.error("STATUS:", err.response.status);
+      console.error("DATA:", err.response.data);
+    } else {
+      console.error("ERROR:", err.message);
+    }
+
     return res.status(500).json({
       message: "Payment initiation failed"
     });
