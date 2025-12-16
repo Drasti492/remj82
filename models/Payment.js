@@ -8,6 +8,11 @@ const paymentSchema = new mongoose.Schema(
       required: true
     },
 
+    phone: {
+      type: String,
+      required: true
+    },
+
     amount: {
       type: Number,
       required: true
@@ -27,6 +32,11 @@ const paymentSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true
+    },
+
+    connects: {
+      type: Number,
+      default: 8
     },
 
     status: {

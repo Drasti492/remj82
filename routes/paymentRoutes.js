@@ -1,16 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
-const Payment = require("../models/Payment");
+const paymentController = require("../controllers/paymentController");
 
-// ===============================
-// USER PAYMENT HISTORY
-// ===============================
-router.get("/my-payments", auth, async (req, res) => {
-  const payments = await Payment.find({ user: req.user._id })
-    .sort({ createdAt: -1 });
+// STK PUSH
+router.post("/stk-push", auth, paymentController.stkPush);
 
-  res.json(payments);
-});
+// PAYHERO CALLBACK (NO AUTH)
+router.post("/payhero-callback", paymentController.payheroCallback);
 
 module.exports = router;

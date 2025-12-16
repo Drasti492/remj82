@@ -7,24 +7,27 @@ const User = require("../models/user");
 // ===============================
 exports.stkPush = async (req, res) => {
   try {
-    const user = req.user;
     const { phone } = req.body;
+    const user = req.user;
 
     if (!phone) {
       return res.status(400).json({ message: "Phone number required" });
     }
 
     const cleanPhone = phone.replace(/^0/, "254");
-    const amount = 100; // Example price
+    const amount = 100; // KES
     const connects = 8;
 
+    // Create payment record FIRST
     const payment = await Payment.create({
       user: user._id,
       phone: cleanPhone,
       amount,
-      connects
+      connects,
+      reference: `PH_${Date.now()}`
     });
 
+    // 🔐 PAYHERO API CALL (REAL)
     await axios.post(
       "https://backend.payhero.co.ke/api/v2/payments",
       {
@@ -45,17 +48,17 @@ exports.stkPush = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Payment prompt sent to your phone"
+      message: "STK prompt sent to your phone"
     });
 
   } catch (err) {
-    console.error("STK error:", err.message);
-    res.status(500).json({ message: "Payment initiation failed" });
+    console.error("STK Push error:", err.response?.data || err.message);
+    res.status(500).json({ message: "Failed to initiate payment" });
   }
 };
 
 // ===============================
-// PAYHERO CALLBACK (CRITICAL)
+// PAYHERO CALLBACK
 // ===============================
 exports.payheroCallback = async (req, res) => {
   try {
@@ -63,29 +66,34 @@ exports.payheroCallback = async (req, res) => {
 
     const payment = await Payment.findById(external_reference);
     if (!payment || payment.status === "success") {
-      return res.status(200).end();
+      return res.sendStatus(200);
     }
 
     if (status !== "success") {
       payment.status = "failed";
       await payment.save();
-      return res.status(200).end();
+      return res.sendStatus(200);
     }
 
+    // Mark payment success
     payment.status = "success";
     await payment.save();
 
+    // 🔥 AUTO VERIFY USER
     const user = await User.findById(payment.user);
     if (user) {
       user.connects += payment.connects;
-      user.verifiedUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      user.isManuallyVerified = true;
+      user.verifiedUntil = new Date(
+        Date.now() + 30 * 24 * 60 * 60 * 1000
+      );
       await user.save();
     }
 
-    res.status(200).end();
+    res.sendStatus(200);
 
   } catch (err) {
-    console.error("Callback error:", err.message);
-    res.status(500).end();
+    console.error("PayHero callback error:", err.message);
+    res.sendStatus(500);
   }
 };
