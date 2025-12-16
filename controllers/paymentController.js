@@ -1,13 +1,13 @@
 const axios = require("axios");
 const User = require("../models/user");
 
-const AMOUNT_KES = 1340;
+const PAYMENT_AMOUNT_KES = 1340;
 const CONNECTS_GRANTED = 8;
 const VERIFICATION_DAYS = 30;
 
-// ===============================
-// STK PUSH INITIATION
-// ===============================
+// ===================================
+// INITIATE STK PUSH (PAYHERO)
+// ===================================
 exports.stkPush = async (req, res) => {
   try {
     let { phone } = req.body;
@@ -16,7 +16,7 @@ exports.stkPush = async (req, res) => {
       return res.status(400).json({ message: "Phone number is required" });
     }
 
-    // Normalize phone number
+    // Normalize phone number (07xx -> 2547xx)
     phone = phone.replace(/\s+/g, "");
     if (phone.startsWith("0")) phone = "254" + phone.slice(1);
 
@@ -41,11 +41,11 @@ exports.stkPush = async (req, res) => {
       });
     }
 
-    // PayHero STK Push
+    // Send STK Push via PayHero
     const response = await axios.post(
       "https://backend.payhero.co.ke/api/v2/payments",
       {
-        amount: AMOUNT_KES,
+        amount: PAYMENT_AMOUNT_KES,
         phone_number: phone,
         channel_id: process.env.PAYHERO_CHANNEL_ID,
         provider: "m-pesa",
@@ -62,36 +62,38 @@ exports.stkPush = async (req, res) => {
 
     if (!response.data || response.data.status !== "queued") {
       return res.status(400).json({
-        message: "Failed to initiate payment"
+        message: "Failed to initiate STK push"
       });
     }
 
     return res.json({
-      message: "STK prompt sent. Complete payment on your phone."
+      message: "STK prompt sent successfully"
     });
   } catch (err) {
-    console.error("STK PUSH ERROR:", err.response?.data || err.message);
+    console.error(
+      "STK PUSH ERROR:",
+      err.response?.data || err.message
+    );
     return res.status(500).json({
       message: "Payment initiation failed"
     });
   }
 };
 
-// ===============================
+// ===================================
 // PAYHERO CALLBACK
-// ===============================
+// ===================================
 exports.payheroCallback = async (req, res) => {
   try {
     const payload = req.body;
 
-    // PayHero always expects a response
+    // Always acknowledge PayHero
     if (!payload || payload.status !== "success") {
       return res.json({ received: true });
     }
 
     const userId = payload.external_reference;
     const user = await User.findById(userId);
-
     if (!user) return res.json({ received: true });
 
     // Prevent double credit
