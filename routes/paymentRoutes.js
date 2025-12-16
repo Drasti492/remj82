@@ -1,12 +1,12 @@
 const express = require("express");
 const router = express.Router();
-const auth = require("../middleware/auth");
-const paymentController = require("../controllers/paymentController");
+const paymentsController = require("../controllers/paymentsController");
+const authMiddleware = require("../middleware/auth");
 
-// STK PUSH
-router.post("/stk-push", auth, paymentController.stkPush);
+// STK Push
+router.post("/stk-push", authMiddleware, paymentsController.stkPush);
 
-// PAYHERO CALLBACK (NO AUTH)
-router.post("/payhero-callback", paymentController.payheroCallback);
+// PayHero Callback
+router.post("/payhero-callback", paymentsController.payheroCallback);
 
 module.exports = router;

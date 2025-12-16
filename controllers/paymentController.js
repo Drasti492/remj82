@@ -1,59 +1,79 @@
 const axios = require("axios");
-const Payment = require("../models/Payment");
 const User = require("../models/user");
 
+const AMOUNT_KES = 1340;
+const CONNECTS_GRANTED = 8;
+const VERIFICATION_DAYS = 30;
+
 // ===============================
-// INITIATE STK PUSH
+// STK PUSH INITIATION
 // ===============================
 exports.stkPush = async (req, res) => {
   try {
-    const { phone } = req.body;
-    const user = req.user;
+    let { phone } = req.body;
 
     if (!phone) {
-      return res.status(400).json({ message: "Phone number required" });
+      return res.status(400).json({ message: "Phone number is required" });
     }
 
-    const cleanPhone = phone.replace(/^0/, "254");
-    const amount = 100; // KES
-    const connects = 8;
+    // Normalize phone number
+    phone = phone.replace(/\s+/g, "");
+    if (phone.startsWith("0")) phone = "254" + phone.slice(1);
 
-    // Create payment record FIRST
-    const payment = await Payment.create({
-      user: user._id,
-      phone: cleanPhone,
-      amount,
-      connects,
-      reference: `PH_${Date.now()}`
-    });
+    if (!/^2547\d{8}$/.test(phone)) {
+      return res.status(400).json({ message: "Invalid phone number format" });
+    }
 
-    // 🔐 PAYHERO API CALL (REAL)
-    await axios.post(
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Must be email-verified
+    if (!user.verified) {
+      return res.status(403).json({
+        message: "Please verify your email before making payment"
+      });
+    }
+
+    // Prevent double active verification
+    if (user.verifiedUntil && user.verifiedUntil > new Date()) {
+      return res.status(400).json({
+        message: "Your premium access is still active"
+      });
+    }
+
+    // PayHero STK Push
+    const response = await axios.post(
       "https://backend.payhero.co.ke/api/v2/payments",
       {
-        amount,
-        phone_number: cleanPhone,
+        amount: AMOUNT_KES,
+        phone_number: phone,
         channel_id: process.env.PAYHERO_CHANNEL_ID,
         provider: "m-pesa",
-        external_reference: payment._id.toString(),
+        external_reference: user._id.toString(),
         callback_url: process.env.PAYHERO_CALLBACK_URL
       },
       {
         headers: {
-          Authorization: process.env.PAYHERO_BASIC_AUTH,
+          Authorization: `Basic ${process.env.PAYHERO_BASIC_AUTH}`,
           "Content-Type": "application/json"
         }
       }
     );
 
-    res.json({
-      success: true,
-      message: "STK prompt sent to your phone"
-    });
+    if (!response.data || response.data.status !== "queued") {
+      return res.status(400).json({
+        message: "Failed to initiate payment"
+      });
+    }
 
+    return res.json({
+      message: "STK prompt sent. Complete payment on your phone."
+    });
   } catch (err) {
-    console.error("STK Push error:", err.response?.data || err.message);
-    res.status(500).json({ message: "Failed to initiate payment" });
+    console.error("STK PUSH ERROR:", err.response?.data || err.message);
+    return res.status(500).json({
+      message: "Payment initiation failed"
+    });
   }
 };
 
@@ -62,38 +82,33 @@ exports.stkPush = async (req, res) => {
 // ===============================
 exports.payheroCallback = async (req, res) => {
   try {
-    const { external_reference, status } = req.body;
+    const payload = req.body;
 
-    const payment = await Payment.findById(external_reference);
-    if (!payment || payment.status === "success") {
-      return res.sendStatus(200);
+    // PayHero always expects a response
+    if (!payload || payload.status !== "success") {
+      return res.json({ received: true });
     }
 
-    if (status !== "success") {
-      payment.status = "failed";
-      await payment.save();
-      return res.sendStatus(200);
+    const userId = payload.external_reference;
+    const user = await User.findById(userId);
+
+    if (!user) return res.json({ received: true });
+
+    // Prevent double credit
+    if (user.verifiedUntil && user.verifiedUntil > new Date()) {
+      return res.json({ received: true });
     }
 
-    // Mark payment success
-    payment.status = "success";
-    await payment.save();
+    user.connects += CONNECTS_GRANTED;
+    user.verifiedUntil = new Date(
+      Date.now() + VERIFICATION_DAYS * 24 * 60 * 60 * 1000
+    );
 
-    // 🔥 AUTO VERIFY USER
-    const user = await User.findById(payment.user);
-    if (user) {
-      user.connects += payment.connects;
-      user.isManuallyVerified = true;
-      user.verifiedUntil = new Date(
-        Date.now() + 30 * 24 * 60 * 60 * 1000
-      );
-      await user.save();
-    }
+    await user.save();
 
-    res.sendStatus(200);
-
+    return res.json({ received: true });
   } catch (err) {
-    console.error("PayHero callback error:", err.message);
-    res.sendStatus(500);
+    console.error("PAYHERO CALLBACK ERROR:", err);
+    return res.json({ received: true });
   }
 };
