@@ -12,6 +12,8 @@ exports.stkPush = async (req, res) => {
   try {
     let { phone } = req.body;
 
+    console.log("➡️ STK PUSH REQUEST:", phone, req.user?._id);
+
     if (!phone) {
       return res.status(400).json({ message: "Phone number is required" });
     }
@@ -42,7 +44,7 @@ exports.stkPush = async (req, res) => {
       channel: process.env.PAYHERO_CHANNEL_ID
     });
 
-    await axios.post(
+    const response = await axios.post(
       "https://backend.payhero.co.ke/api/v2/payments",
       {
         amount: PAYMENT_AMOUNT_KES,
@@ -54,31 +56,50 @@ exports.stkPush = async (req, res) => {
       },
       {
         headers: {
-          Authorization: process.env.PAYHERO_BASIC_AUTH,
+          Authorization: `Basic ${process.env.PAYHERO_BASIC_AUTH}`,
           "Content-Type": "application/json"
         },
         timeout: 15000
       }
     );
 
+    console.log("✅ PAYHERO RESPONSE:", response.data);
+
     return res.json({
-      message: "STK prompt sent successfully"
+      message: "STK prompt sent successfully",
+      reference: response.data?.reference || null
     });
+
   } catch (err) {
     console.error("❌ STK PUSH FAILED");
+
     console.error("MESSAGE:", err.message);
 
-    if (err.response) {
-      console.error("STATUS:", err.response.status);
-      console.error("DATA:", err.response.data);
+    if (err.code === "ECONNABORTED") {
+      console.error("⏱️ PayHero request timed out");
     }
 
+    if (err.response) {
+      console.error("PAYHERO STATUS:", err.response.status);
+      console.error(
+        "PAYHERO DATA:",
+        JSON.stringify(err.response.data, null, 2)
+      );
+    }
+
+    console.error("ENV CHECK:", {
+      PAYHERO_BASIC_AUTH: !!process.env.PAYHERO_BASIC_AUTH,
+      PAYHERO_CHANNEL_ID: !!process.env.PAYHERO_CHANNEL_ID,
+      PAYHERO_CALLBACK_URL: !!process.env.PAYHERO_CALLBACK_URL
+    });
+
     return res.status(500).json({
-      message: "Payment initiation failed"
+      message:
+        err.response?.data?.message ||
+        "Payment initiation failed. Please try again."
     });
   }
 };
-
 
 // ===================================
 // PAYHERO CALLBACK
@@ -86,6 +107,8 @@ exports.stkPush = async (req, res) => {
 exports.payheroCallback = async (req, res) => {
   try {
     const payload = req.body;
+
+    console.log("🔔 PAYHERO CALLBACK:", payload);
 
     // Always acknowledge PayHero
     if (!payload || payload.status !== "success") {
@@ -108,9 +131,12 @@ exports.payheroCallback = async (req, res) => {
 
     await user.save();
 
+    console.log("✅ USER VERIFIED & CONNECTS ADDED:", user.email);
+
     return res.json({ received: true });
+
   } catch (err) {
-    console.error("PAYHERO CALLBACK ERROR:", err);
+    console.error("❌ PAYHERO CALLBACK ERROR:", err.message);
     return res.json({ received: true });
   }
 };
