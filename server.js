@@ -37,7 +37,7 @@ app.use(
 mongoose.set("strictQuery", true);
 
 // ------------------------------------
-// Import Routes (ALL must export a router ONLY)
+// Import Routes
 // ------------------------------------
 const authRoutes = require("./routes/authRoutes");
 const orderRoutes = require("./routes/orderRoutes");
@@ -46,6 +46,7 @@ const notificationsRoutes = require("./routes/notificationsRoutes");
 const verifyRoutes = require("./routes/verifyRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const withdrawalRoutes = require("./routes/withdrawalRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
 
 // ------------------------------------
 // Attach Routes
@@ -57,8 +58,7 @@ app.use("/api/notifications", notificationsRoutes);
 app.use("/api/verify", verifyRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/withdrawals", withdrawalRoutes);
-app.use("/api/payments", require("./routes/paymentRoutes"));
-app.use("/api/payments", require("./routes/payments"));
+app.use("/api/payments", paymentRoutes);
 
 // ------------------------------------
 // Brevo Email (Order Notification)
@@ -74,7 +74,6 @@ app.post("/api/order", async (req, res) => {
       return res.status(400).json({ message: "Cart is empty." });
     }
 
-    // Build email HTML
     const orderItemsHtml = cart
       .map(
         (item) => `
@@ -85,7 +84,6 @@ app.post("/api/order", async (req, res) => {
       )
       .join("");
 
-    // Admin Email
     const adminEmail = new Brevo.SendSmtpEmail();
     adminEmail.sender = { email: "no-reply@yourdomain.com", name: "Your Shop" };
     adminEmail.to = [{ email: "youremail@example.com", name: "Store Admin" }];
@@ -99,9 +97,9 @@ app.post("/api/order", async (req, res) => {
       <ul>${orderItemsHtml}</ul>
       <h3>Total: Ksh ${total.toFixed(2)}</h3>
     `;
+
     await brevo.sendTransacEmail(adminEmail);
 
-    // Customer Email
     const clientEmail = new Brevo.SendSmtpEmail();
     clientEmail.sender = { email: "no-reply@yourdomain.com", name: "Your Shop" };
     clientEmail.to = [{ email: customerEmail, name: customerName }];
@@ -116,18 +114,9 @@ app.post("/api/order", async (req, res) => {
 
     await brevo.sendTransacEmail(clientEmail);
 
-    const whatsappUrl = `https://wa.me/254?text=Hi%20${encodeURIComponent(
-      customerName
-    )},%20thank%20you%20for%20your%20order%20of%20Ksh%20${total.toFixed(
-      2
-    )}%20from%20Your%20Shop.%20We%20will%20contact%20you%20soon.`;
-
-
     res.status(200).json({
-      message: "Order notification sent successfully.",
-      whatsappRedirect: whatsappUrl
+      message: "Order notification sent successfully."
     });
-
   } catch (error) {
     console.error("Error sending order email:", error.message);
     res.status(500).json({ message: "Failed to send order email." });
