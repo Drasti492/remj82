@@ -5,20 +5,15 @@ const PAYMENT_AMOUNT_KES = 1340;
 const CONNECTS_GRANTED = 8;
 const VERIFICATION_DAYS = 30;
 
-// ===================================
-// INITIATE STK PUSH (PAYHERO)
-// ===================================
 exports.stkPush = async (req, res) => {
   try {
     let { phone } = req.body;
-
-    console.log("➡️ STK PUSH REQUEST:", phone, req.user?._id);
 
     if (!phone) {
       return res.status(400).json({ message: "Phone number is required" });
     }
 
-    // Normalize phone number
+    // Normalize phone
     phone = phone.replace(/\s+/g, "");
     if (phone.startsWith("0")) phone = "254" + phone.slice(1);
 
@@ -31,7 +26,7 @@ exports.stkPush = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Prevent paying twice if still active
+    // Prevent double active payment
     if (user.verifiedUntil && user.verifiedUntil > new Date()) {
       return res.status(400).json({
         message: "Your premium access is still active"
@@ -66,33 +61,27 @@ exports.stkPush = async (req, res) => {
     console.log("✅ PAYHERO RESPONSE:", response.data);
 
     return res.json({
-      message: "STK prompt sent successfully",
-      reference: response.data?.reference || null
+      message: "STK prompt sent successfully"
     });
-
   } catch (err) {
-  console.error("❌ STK PUSH FAILED — RAW ERROR");
+    console.error("❌ STK PUSH FAILED — RAW ERROR");
 
-  console.error(
-    JSON.stringify(
-      {
-        message: err.message,
-        name: err.name,
-        code: err.code,
-        status: err.response?.status,
-        data: err.response?.data,
-        headers: err.response?.headers
-      },
-      null,
-      2
-    )
-  );
+    console.error(
+      JSON.stringify(
+        {
+          message: err.message,
+          status: err.response?.status,
+          data: err.response?.data
+        },
+        null,
+        2
+      )
+    );
 
-  return res.status(500).json({
-    message: "Payment gateway error. Please try again later."
-  });
-}
-
+    return res.status(500).json({
+      message: "Payment gateway error. Please try again."
+    });
+  }
 };
 
 // ===================================
@@ -102,9 +91,6 @@ exports.payheroCallback = async (req, res) => {
   try {
     const payload = req.body;
 
-    console.log("🔔 PAYHERO CALLBACK:", payload);
-
-    // Always acknowledge PayHero
     if (!payload || payload.status !== "success") {
       return res.json({ received: true });
     }
@@ -113,7 +99,6 @@ exports.payheroCallback = async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.json({ received: true });
 
-    // Prevent double credit
     if (user.verifiedUntil && user.verifiedUntil > new Date()) {
       return res.json({ received: true });
     }
@@ -125,12 +110,11 @@ exports.payheroCallback = async (req, res) => {
 
     await user.save();
 
-    console.log("✅ USER VERIFIED & CONNECTS ADDED:", user.email);
+    console.log("✅ USER VERIFIED VIA PAYMENT:", user.email);
 
     return res.json({ received: true });
-
   } catch (err) {
-    console.error("❌ PAYHERO CALLBACK ERROR:", err.message);
+    console.error("❌ PAYHERO CALLBACK ERROR:", err);
     return res.json({ received: true });
   }
 };
