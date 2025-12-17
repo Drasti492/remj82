@@ -71,34 +71,28 @@ exports.stkPush = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("❌ STK PUSH FAILED");
+  console.error("❌ STK PUSH FAILED — RAW ERROR");
 
-    console.error("MESSAGE:", err.message);
+  console.error(
+    JSON.stringify(
+      {
+        message: err.message,
+        name: err.name,
+        code: err.code,
+        status: err.response?.status,
+        data: err.response?.data,
+        headers: err.response?.headers
+      },
+      null,
+      2
+    )
+  );
 
-    if (err.code === "ECONNABORTED") {
-      console.error("⏱️ PayHero request timed out");
-    }
+  return res.status(500).json({
+    message: "Payment gateway error. Please try again later."
+  });
+}
 
-    if (err.response) {
-      console.error("PAYHERO STATUS:", err.response.status);
-      console.error(
-        "PAYHERO DATA:",
-        JSON.stringify(err.response.data, null, 2)
-      );
-    }
-
-    console.error("ENV CHECK:", {
-      PAYHERO_BASIC_AUTH: !!process.env.PAYHERO_BASIC_AUTH,
-      PAYHERO_CHANNEL_ID: !!process.env.PAYHERO_CHANNEL_ID,
-      PAYHERO_CALLBACK_URL: !!process.env.PAYHERO_CALLBACK_URL
-    });
-
-    return res.status(500).json({
-      message:
-        err.response?.data?.message ||
-        "Payment initiation failed. Please try again."
-    });
-  }
 };
 
 // ===================================
